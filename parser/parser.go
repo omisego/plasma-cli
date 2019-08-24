@@ -17,6 +17,8 @@ package parser
 import (
 	"encoding/hex"
 	"os"
+	"fmt"
+	"encoding/json"
 
 	"github.com/omisego/plasma-cli/plasma"
 	"github.com/omisego/plasma-cli/util"
@@ -27,7 +29,6 @@ import (
 var (
 	get              = kingpin.Command("get", "Get a resource.").Default()
 	getUTXO          = get.Command("utxos", "Retrieve UTXO data from the Watcher service")
-	watcherURL       = get.Flag("watcher", "FQDN of the Watcher in the format https://watcher.path.net").Required().String()
 	ownerUTXOAddress = get.Flag("address", "Owner address to search UTXOs").String()
 	getBalance       = get.Command("balance", "Retrieve balance of an address from the Watcher service")
 	status           = get.Command("status", "Get status from the Watcher")
@@ -70,7 +71,22 @@ var (
 	createAccount = create.Command("account", "Create an account consisting of Public and Private key")
 )
 
+type Configuration struct {
+    WatcherURL   string
+    Address 	 string
+}
+
 func ParseArgs() {
+
+	var config Configuration
+    configFile, err := os.Open("config.json")
+    defer configFile.Close()
+    if err != nil {
+        fmt.Println(err.Error())
+    }
+    jsonParser := json.NewDecoder(configFile)
+	jsonParser.Decode(&config)
+	
 	switch kingpin.Parse() {
 	case getUTXO.FullCommand():
 		//plasma_cli get utxos --address=0x944A81BeECac91802787fBCFB9767FCBf81db1f5 --watcher=http://watcher.path.net
@@ -79,7 +95,7 @@ func ParseArgs() {
 			log.Error("Address is required to get UTXO data")
 			os.Exit(1)
 		}
-		utxos := plasma.GetUTXOsFromAddress(ownerUTXOAddress, *watcherURL)
+		utxos := plasma.GetUTXOsFromAddress(ownerUTXOAddress, config.WatcherURL)
 		util.DisplayUTXOS(utxos)
 	case getBalance.FullCommand():
 		//plamsa_cli get balance --address=0x944A81BeECac91802787fBCFB9767FCBf81db1f5 --watcher=http://watcher.path.net
@@ -88,11 +104,11 @@ func ParseArgs() {
 			log.Error("Address is required to get balance")
 			os.Exit(1)
 		}
-		balance := plasma.GetBalance(ownerBalanceAddress, *watcherURL)
+		balance := plasma.GetBalance(ownerBalanceAddress, config.WatcherURL)
 		util.DisplayBalance(balance)
 	case status.FullCommand():
 		//plamsa_cli get status --watcher=http://watcher.path.net
-		plasma.GetWatcherStatus(*watcherURL)
+		plasma.GetWatcherStatus(config.WatcherURL)
 	case deposit.FullCommand():
 		//plasma_cli deposit --privatekey=0x944A81BeECac91802787fBCFB9767FCBf81db1f5 --client=https://rinkeby.infura.io/v3/api_key --contract=0x457e2ec4ad356d3cb449e3bd4ba640d720c30377 --currency=ETH
 		d := plasma.PlasmaDeposit{PrivateKey: *privateKey, Client: *client, Contract: *contract, Amount: *depositAmount, Owner: *depositOwner, Currency: *depositCurrency}
@@ -139,7 +155,7 @@ func ParseArgs() {
 	case getExit.FullCommand():
 		//plasma_cli get exit --watcher=https://watcher.ari.omg.network --utxo=1000000000000
 		log.Info("Getting UTXO exit data")
-		exitData, err := plasma.GetUTXOExitData(*watcherURL, *getExitUTXOPosition)
+		exitData, err := plasma.GetUTXOExitData(config.WatcherURL, *getExitUTXOPosition)
 		if err != nil {
 			log.Warn(err)
 			os.Exit(0)
